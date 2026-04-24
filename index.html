@@ -2,45 +2,71 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <title>NoteVault</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Lora:wght@700;800&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Lora:wght@700&family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: #f1f5f9; font-family: 'DM Sans', sans-serif; }
-  ::-webkit-scrollbar { width: 5px; }
-  ::-webkit-scrollbar-track { background: #f1f5f9; }
-  ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-  @keyframes cardIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-  @keyframes modalIn { from { opacity: 0; transform: scale(.97); } to { opacity: 1; transform: scale(1); } }
-  input::placeholder, textarea::placeholder { color: #cbd5e1; }
-  select option { background: white; color: #374151; }
-  button { font-family: 'DM Sans', sans-serif; }
-  .card:hover { box-shadow: 0 4px 18px rgba(0,0,0,.09) !important; transform: translateY(-2px) !important; }
-  .sidebar-btn:hover { background: #f1f5f9 !important; }
-  .sidebar-btn.active { background: #1e293b !important; color: white !important; }
-  .add-item-btn:hover { background: rgba(0,0,0,.04) !important; }
-  .del-btn:hover { color: #f43f5e !important; }
-  .pin-btn:hover { color: #475569 !important; }
+  html, body, #root { height: 100%; }
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: #f1f5f9;
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior: none;
+  }
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+
+  /* Animations */
+  @keyframes fadeUp   { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
+  @keyframes fadeIn   { from { opacity:0; } to { opacity:1; } }
+  @keyframes slideUp  { from { transform:translateY(100%); } to { transform:translateY(0); } }
+  @keyframes scaleIn  { from { opacity:0; transform:scale(.94); } to { opacity:1; transform:scale(1); } }
+  @keyframes fabPop   { 0%{transform:scale(0) rotate(-90deg);} 70%{transform:scale(1.12) rotate(4deg);} 100%{transform:scale(1) rotate(0deg);} }
+
+  /* Placeholders */
+  input::placeholder, textarea::placeholder { color: #94a3b8; }
+  button { font-family: 'DM Sans', sans-serif; cursor: pointer; }
+  select { font-family: 'DM Sans', sans-serif; }
+  select option { background: white; color: #1e293b; }
+
+  /* Tap states */
+  .tappable { transition: opacity .12s; }
+  .tappable:active { opacity: .65; }
+
+  /* Card hover (desktop) */
+  @media (hover: hover) {
+    .note-card:hover { box-shadow: 0 4px 20px rgba(0,0,0,.10); transform: translateY(-2px); }
+  }
+  .note-card:active { opacity: .88; transform: scale(.985); }
+  .note-card { transition: box-shadow .18s, transform .18s, opacity .12s; }
+
+  /* Bottom nav safe area */
+  .bottom-nav { padding-bottom: env(safe-area-inset-bottom, 0px); }
 </style>
 </head>
 <body>
 <div id="root"></div>
 
 <script type="text/babel">
-const { useState, useEffect, useRef, useCallback } = React;
+const { useState, useEffect, useRef, useCallback, useMemo } = React;
 
-const STORAGE_KEY = 'nodevault-v1';
+/* ─── Constants ──────────────────────────────────────────────────────────── */
+const STORAGE_KEY = 'nodevault-v2';
 
 const ACCENTS = [
-  { id:'stone',   border:'#94a3b8', tint:'#f8fafc', label:'Default' },
+  { id:'none',    border:'#94a3b8', tint:'#ffffff', label:'White'   },
   { id:'amber',   border:'#f59e0b', tint:'#fffbeb', label:'Amber'   },
-  { id:'emerald', border:'#10b981', tint:'#f0fdf9', label:'Green'   },
+  { id:'emerald', border:'#10b981', tint:'#ecfdf5', label:'Green'   },
   { id:'rose',    border:'#f43f5e', tint:'#fff1f2', label:'Rose'    },
   { id:'violet',  border:'#8b5cf6', tint:'#f5f3ff', label:'Violet'  },
   { id:'sky',     border:'#0ea5e9', tint:'#f0f9ff', label:'Sky'     },
@@ -48,561 +74,825 @@ const ACCENTS = [
 ];
 
 const CATEGORIES = ['Personal','Work','Shopping','Ideas','Health','Finance','Travel','Other'];
-const CAT_ICONS  = { Personal:'👤', Work:'💼', Shopping:'🛒', Ideas:'💡', Health:'❤️', Finance:'💰', Travel:'✈️', Other:'📎' };
+const CAT_ICONS  = {
+  Personal:'👤', Work:'💼', Shopping:'🛒', Ideas:'💡',
+  Health:'❤️', Finance:'💰', Travel:'✈️', Other:'📎', All:'📋'
+};
 
-const mkId = () => Date.now().toString() + Math.random().toString(36).slice(2,6);
+const mkId = () => Date.now().toString(36) + Math.random().toString(36).slice(2,6);
 
-const defaultNote = () => ({
-  id: mkId(),
-  title:'', content:'', type:'note', items:[],
-  category:'Personal', tags:[], color:'stone',
+const newNote = (type='note') => ({
+  id: mkId(), title:'', content:'', type,
+  items:[], category:'Personal', tags:[], color:'none',
   pinned:false,
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
 });
 
-// Highlight matching text
+/* ─── Storage ────────────────────────────────────────────────────────────── */
+const load  = ()  => { try { const r=localStorage.getItem(STORAGE_KEY); return r?JSON.parse(r):[]; } catch{return[];} };
+const save  = (n) => { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(n)); } catch(e){console.error(e);} };
+
+/* ─── Highlight ──────────────────────────────────────────────────────────── */
 function Hl({ text, q }) {
-  if (!q || !text) return <span>{text}</span>;
-  const esc = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const parts = text.split(new RegExp(`(${esc})`, 'gi'));
+  if (!q || !text) return <>{text}</>;
+  const esc = q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+  return <>
+    {text.split(new RegExp(`(${esc})`, 'gi')).map((p,i) =>
+      p.toLowerCase()===q.toLowerCase()
+        ? <mark key={i} style={{background:'#fef08a',color:'#713f12',borderRadius:2,padding:'0 1px'}}>{p}</mark>
+        : p
+    )}
+  </>;
+}
+
+/* ─── CheckCircle ────────────────────────────────────────────────────────── */
+function CheckCircle({ checked, color, size=22, onToggle }) {
   return (
-    <span>
-      {parts.map((p, i) =>
-        p.toLowerCase() === q.toLowerCase()
-          ? <mark key={i} style={{ background:'#fef08a', color:'#713f12', borderRadius:2, padding:'0 2px' }}>{p}</mark>
-          : p
-      )}
-    </span>
+    <button
+      onClick={onToggle}
+      style={{
+        width:size, height:size, borderRadius:'50%', flexShrink:0,
+        border:`2px solid ${checked ? color : '#cbd5e1'}`,
+        background: checked ? color : 'white',
+        display:'flex', alignItems:'center', justifyContent:'center',
+        transition:'all .2s', padding:0,
+      }}
+    >
+      {checked && <svg width={size*.45} height={size*.45} viewBox="0 0 12 10" fill="none">
+        <path d="M1 5l3.5 3.5L11 1" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>}
+    </button>
   );
 }
 
-// ── Note Card ────────────────────────────────────────────────────────────────
-function NoteCard({ note, onOpen, onPin, onDelete, sq }) {
-  const acc = ACCENTS.find(a => a.id === note.color) || ACCENTS[0];
-  const checked = note.items.filter(i => i.checked).length;
+/* ─── NoteCard ───────────────────────────────────────────────────────────── */
+function NoteCard({ note, onOpen, sq }) {
+  const acc     = ACCENTS.find(a=>a.id===note.color)||ACCENTS[0];
+  const checked = note.items.filter(i=>i.checked).length;
   const total   = note.items.length;
 
   return (
     <div
-      className="card"
+      className="note-card"
       onClick={() => onOpen(note)}
       style={{
         background: acc.tint,
-        borderRadius: 12,
+        borderRadius: 14,
         border: '1px solid #e2e8f0',
         borderLeft: `4px solid ${acc.border}`,
-        padding: '14px 16px',
+        padding: '14px 16px 12px',
         cursor: 'pointer',
         position: 'relative',
-        transition: 'box-shadow .18s, transform .18s',
       }}
     >
-      {/* action buttons */}
-      <div
-        style={{ position:'absolute', top:8, right:8, display:'flex', gap:2, alignItems:'center' }}
-        onClick={e => e.stopPropagation()}
-      >
-        {note.pinned && <span style={{ fontSize:13, marginRight:2 }}>📌</span>}
-        <button
-          className="pin-btn"
-          onClick={() => onPin(note.id)}
-          title={note.pinned ? 'Unpin' : 'Pin'}
-          style={{ background:'none', border:'none', cursor:'pointer', color:'#94a3b8', fontSize:14, padding:'3px 5px', borderRadius:4, lineHeight:1 }}
-        >{note.pinned ? '⊘' : '⊕'}</button>
-        <button
-          className="del-btn"
-          onClick={() => onDelete(note.id)}
-          style={{ background:'none', border:'none', cursor:'pointer', color:'#94a3b8', fontSize:13, padding:'3px 5px', borderRadius:4, lineHeight:1 }}
-        >✕</button>
-      </div>
+      {/* pinned indicator */}
+      {note.pinned && (
+        <span style={{ position:'absolute', top:10, right:12, fontSize:14 }}>📌</span>
+      )}
 
       {/* title */}
-      <div style={{ fontFamily:"'Lora',Georgia,serif", fontSize:15, fontWeight:700, color:'#1e293b', marginBottom:6, paddingRight:56, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', lineHeight:1.3 }}>
+      <div style={{
+        fontFamily:"'Lora',serif", fontSize:15.5, fontWeight:700,
+        color:'#1e293b', marginBottom:7, lineHeight:1.3,
+        paddingRight: note.pinned ? 28 : 0,
+        overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap',
+      }}>
         {note.title
-          ? <Hl text={note.title} q={sq} />
-          : <span style={{ color:'#cbd5e1', fontStyle:'italic' }}>Untitled</span>}
+          ? <Hl text={note.title} q={sq}/>
+          : <span style={{color:'#cbd5e1',fontStyle:'italic'}}>Untitled</span>}
       </div>
 
-      {/* meta */}
-      <div style={{ display:'flex', flexWrap:'wrap', alignItems:'center', gap:5, marginBottom:9 }}>
-        <span style={{ fontSize:10, fontWeight:600, color:acc.border, background:acc.border+'28', padding:'2px 8px', borderRadius:20 }}>
+      {/* category badge */}
+      <div style={{display:'flex', flexWrap:'wrap', alignItems:'center', gap:5, marginBottom:9}}>
+        <span style={{
+          fontSize:10.5, fontWeight:600, color:acc.border,
+          background:acc.border+'22', padding:'2px 9px', borderRadius:20,
+        }}>
           {CAT_ICONS[note.category]} {note.category}
         </span>
-        {note.type === 'checklist' &&
-          <span style={{ fontSize:10, color:'#64748b', background:'#f1f5f9', padding:'2px 7px', borderRadius:20 }}>☑ List</span>}
-        {note.tags.map(t => <span key={t} style={{ fontSize:10, color:'#94a3b8' }}>#{t}</span>)}
+        {note.type==='checklist' && (
+          <span style={{fontSize:10.5,color:'#64748b',background:'#f1f5f9',padding:'2px 8px',borderRadius:20}}>
+            ☑ List
+          </span>
+        )}
+        {note.tags.slice(0,2).map(t=>(
+          <span key={t} style={{fontSize:10.5,color:'#94a3b8'}}>#{t}</span>
+        ))}
       </div>
 
-      {/* checklist preview */}
-      {note.type === 'checklist' && total > 0 ? (
-        <div>
-          <div style={{ height:4, borderRadius:4, background:'#e2e8f0', marginBottom:7, overflow:'hidden' }}>
-            <div style={{ height:'100%', width:`${(checked/total)*100}%`, background:acc.border, borderRadius:4, transition:'width .3s' }} />
+      {/* content preview */}
+      {note.type==='checklist' && total>0 ? (
+        <>
+          <div style={{height:4,borderRadius:4,background:'#e2e8f0',marginBottom:6,overflow:'hidden'}}>
+            <div style={{height:'100%',width:`${(checked/total)*100}%`,background:acc.border,borderRadius:4,transition:'width .3s'}}/>
           </div>
-          <div style={{ fontSize:11, color:'#94a3b8', marginBottom:7 }}>{checked}/{total} done</div>
-          {note.items.slice(0,4).map(item => (
-            <div key={item.id} style={{ display:'flex', alignItems:'center', gap:7, marginBottom:4 }}>
-              <span style={{ width:14, height:14, borderRadius:'50%', flexShrink:0, border:`2px solid ${item.checked ? acc.border : '#cbd5e1'}`, background:item.checked ? acc.border : 'transparent', display:'inline-flex', alignItems:'center', justifyContent:'center', fontSize:8, color:'white' }}>
-                {item.checked ? '✓' : ''}
-              </span>
-              <span style={{ fontSize:12.5, color:item.checked ? '#94a3b8' : '#475569', textDecoration:item.checked ? 'line-through' : 'none', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-                <Hl text={item.text} q={sq} />
+          <div style={{fontSize:11.5,color:'#94a3b8',marginBottom:7}}>{checked}/{total} done</div>
+          {note.items.slice(0,3).map(item=>(
+            <div key={item.id} style={{display:'flex',alignItems:'center',gap:7,marginBottom:4}}>
+              <span style={{
+                width:13,height:13,borderRadius:'50%',flexShrink:0,
+                border:`2px solid ${item.checked?acc.border:'#cbd5e1'}`,
+                background:item.checked?acc.border:'transparent',
+                display:'inline-flex',alignItems:'center',justifyContent:'center',
+                fontSize:7,color:'white',
+              }}>{item.checked?'✓':''}</span>
+              <span style={{fontSize:12.5,color:item.checked?'#94a3b8':'#475569',textDecoration:item.checked?'line-through':'none',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+                <Hl text={item.text} q={sq}/>
               </span>
             </div>
           ))}
-          {total > 4 && <div style={{ fontSize:11, color:'#94a3b8' }}>+{total-4} more…</div>}
-        </div>
+          {total>3 && <div style={{fontSize:11,color:'#94a3b8',marginTop:2}}>+{total-3} more</div>}
+        </>
       ) : (
-        <p style={{ fontSize:13, color:'#475569', lineHeight:1.65, margin:0, display:'-webkit-box', WebkitLineClamp:3, WebkitBoxOrient:'vertical', overflow:'hidden' }}>
+        <p style={{fontSize:13,color:'#64748b',lineHeight:1.6,margin:0,display:'-webkit-box',WebkitLineClamp:3,WebkitBoxOrient:'vertical',overflow:'hidden'}}>
           {note.content
-            ? <Hl text={note.content} q={sq} />
-            : <span style={{ color:'#cbd5e1', fontStyle:'italic' }}>No content</span>}
+            ? <Hl text={note.content} q={sq}/>
+            : <span style={{color:'#cbd5e1',fontStyle:'italic'}}>No content</span>}
         </p>
       )}
 
-      <div style={{ marginTop:10, fontSize:10.5, color:'#cbd5e1' }}>
-        {new Date(note.updatedAt).toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' })}
+      {/* timestamp */}
+      <div style={{marginTop:10,fontSize:10.5,color:'#94a3b8'}}>
+        {new Date(note.updatedAt).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}
       </div>
     </div>
   );
 }
 
-// ── Note Editor ───────────────────────────────────────────────────────────────
-function NoteEditor({ note, onSave, onClose }) {
-  const [draft, setDraft]     = useState({ ...note, items:[...note.items.map(i=>({...i}))] });
+/* ─── NoteEditor (full-screen) ───────────────────────────────────────────── */
+function NoteEditor({ note, onSave, onClose, onDelete }) {
+  const [draft,    setDraft]    = useState({...note, items:note.items.map(i=>({...i}))});
   const [tagInput, setTagInput] = useState('');
-  const acc     = ACCENTS.find(a => a.id === draft.color) || ACCENTS[0];
+  const [showOpts, setShowOpts] = useState(false); // colour/category sheet
+  const acc     = ACCENTS.find(a=>a.id===draft.color)||ACCENTS[0];
   const textRef = useRef(null);
+  const isNew   = !note.title && !note.content && note.items.length===0;
 
-  useEffect(() => {
-    if (draft.type === 'note' && textRef.current) textRef.current.focus();
-  }, []);
+  useEffect(()=>{
+    if (draft.type==='note' && textRef.current) {
+      textRef.current.focus();
+      textRef.current.setSelectionRange(draft.content.length, draft.content.length);
+    }
+  },[]);
 
-  // Close on Escape
-  useEffect(() => {
-    const handler = e => { if (e.key === 'Escape') handleSave(); };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [draft]);
-
-  const up = (k, v) => setDraft(d => ({ ...d, [k]:v, updatedAt:new Date().toISOString() }));
+  const up = (k,v) => setDraft(d=>({...d,[k]:v,updatedAt:new Date().toISOString()}));
 
   const addItem = (afterId) => {
-    const newI = { id:mkId(), text:'', checked:false };
+    const n = {id:mkId(),text:'',checked:false};
     const items = draft.items;
-    const idx   = afterId ? items.findIndex(i => i.id === afterId) : items.length - 1;
-    up('items', [...items.slice(0, idx+1), newI, ...items.slice(idx+1)]);
-    setTimeout(() => document.getElementById(`item-${newI.id}`)?.focus(), 60);
+    const idx   = afterId ? items.findIndex(i=>i.id===afterId) : items.length-1;
+    up('items',[...items.slice(0,idx+1),n,...items.slice(idx+1)]);
+    setTimeout(()=>document.getElementById(`ei-${n.id}`)?.focus(),60);
   };
-
-  const updI = (id, text) => up('items', draft.items.map(i => i.id===id ? {...i,text} : i));
-  const togI = (id)        => up('items', draft.items.map(i => i.id===id ? {...i,checked:!i.checked} : i));
-  const delI = (id)        => up('items', draft.items.filter(i => i.id!==id));
+  const updI = (id,text) => up('items',draft.items.map(i=>i.id===id?{...i,text}:i));
+  const togI = (id)      => up('items',draft.items.map(i=>i.id===id?{...i,checked:!i.checked}:i));
+  const delI = (id)      => up('items',draft.items.filter(i=>i.id!==id));
 
   const addTag = () => {
-    const t = tagInput.trim().toLowerCase().replace(/\s+/g,'-');
-    if (t && !draft.tags.includes(t)) up('tags', [...draft.tags, t]);
+    const t=tagInput.trim().toLowerCase().replace(/\s+/g,'-');
+    if(t&&!draft.tags.includes(t)) up('tags',[...draft.tags,t]);
     setTagInput('');
   };
 
   const handleSave = () => {
-    const has = draft.title.trim() || draft.content.trim() || draft.items.some(i=>i.text.trim());
-    if (has) onSave({ ...draft, items:draft.items.filter(i=>i.text.trim()) });
+    const has = draft.title.trim()||draft.content.trim()||draft.items.some(i=>i.text.trim());
+    if (has) onSave({...draft, items:draft.items.filter(i=>i.text.trim())});
     onClose();
   };
 
-  const checked = draft.items.filter(i=>i.checked).length;
-  const total   = draft.items.length;
-  const ordered = [...draft.items.filter(i=>!i.checked), ...draft.items.filter(i=>i.checked)];
+  const handleDelete = () => {
+    if (confirm('Delete this note?')) { onDelete(draft.id); onClose(); }
+  };
+
+  const checked=draft.items.filter(i=>i.checked).length, total=draft.items.length;
+  const ordered=[...draft.items.filter(i=>!i.checked),...draft.items.filter(i=>i.checked)];
 
   return (
-    <div
-      onClick={e => { if (e.target === e.currentTarget) handleSave(); }}
-      style={{ position:'fixed', inset:0, background:'rgba(15,23,42,.45)', zIndex:200, display:'flex', alignItems:'center', justifyContent:'center', padding:20, backdropFilter:'blur(6px)' }}
-    >
-      <div style={{ background:acc.tint, borderRadius:16, border:'1px solid #e2e8f0', borderLeft:`5px solid ${acc.border}`, width:'100%', maxWidth:580, maxHeight:'92vh', display:'flex', flexDirection:'column', boxShadow:'0 24px 64px rgba(0,0,0,.18)', overflow:'hidden', animation:'modalIn .18s ease' }}>
+    <div style={{
+      position:'fixed',inset:0,zIndex:300,
+      background:'white',
+      display:'flex',flexDirection:'column',
+      animation:'scaleIn .2s ease',
+    }}>
+      {/* ── Editor top bar ── */}
+      <div style={{
+        display:'flex',alignItems:'center',gap:0,
+        padding:'12px 16px',
+        borderBottom:'1px solid #f1f5f9',
+        flexShrink:0,
+      }}>
+        {/* Back / Save */}
+        <button
+          className="tappable"
+          onClick={handleSave}
+          style={{background:'none',border:'none',padding:'8px 12px 8px 0',fontSize:22,color:'#1e293b',lineHeight:1,marginRight:4}}
+          aria-label="Save and go back"
+        >←</button>
 
-        {/* toolbar */}
-        <div style={{ padding:'12px 16px', borderBottom:'1px solid #e2e8f0', display:'flex', gap:8, alignItems:'center', background:'white', flexWrap:'wrap' }}>
-          {/* type toggle */}
-          <div style={{ display:'flex', background:'#f1f5f9', borderRadius:8, padding:3, gap:2 }}>
-            {['note','checklist'].map(t => (
-              <button key={t} onClick={() => up('type', t)} style={{ background:draft.type===t?'white':'none', border:'none', cursor:'pointer', color:draft.type===t?'#1e293b':'#94a3b8', fontSize:11.5, fontWeight:draft.type===t?600:400, padding:'4px 12px', borderRadius:6, boxShadow:draft.type===t?'0 1px 4px rgba(0,0,0,.10)':'none', transition:'all .15s' }}>
-                {t==='note' ? '◻ Note' : '☑ List'}
-              </button>
-            ))}
-          </div>
-
-          {/* category */}
-          <select value={draft.category} onChange={e=>up('category',e.target.value)} style={{ background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:7, color:'#475569', fontSize:11.5, padding:'4px 8px', flex:1, minWidth:100 }}>
-            {CATEGORIES.map(c => <option key={c} value={c}>{CAT_ICONS[c]} {c}</option>)}
-          </select>
-
-          {/* colour dots */}
-          <div style={{ display:'flex', gap:5, alignItems:'center' }}>
-            {ACCENTS.map(a => (
-              <button key={a.id} onClick={() => up('color', a.id)} title={a.label} style={{ width:18, height:18, borderRadius:'50%', background:a.border, border:draft.color===a.id?'3px solid #1e293b':'2px solid transparent', cursor:'pointer', outline:'none', transition:'border .15s' }} />
-            ))}
-          </div>
-
-          {/* pin */}
-          <button onClick={() => up('pinned', !draft.pinned)} style={{ background:'none', border:'none', cursor:'pointer', fontSize:17, opacity:draft.pinned?1:.25, transition:'opacity .15s' }} title={draft.pinned?'Unpin':'Pin'}>📌</button>
-
-          {/* save */}
-          <button onClick={handleSave} style={{ background:acc.border, border:'none', borderRadius:8, color:'white', fontWeight:700, fontSize:12.5, padding:'6px 16px', cursor:'pointer', boxShadow:`0 2px 8px ${acc.border}55` }}>Save</button>
-          <button onClick={handleSave} style={{ background:'none', border:'none', cursor:'pointer', color:'#94a3b8', fontSize:18, lineHeight:1 }}>✕</button>
+        {/* Type toggle — prominent */}
+        <div style={{display:'flex',background:'#f1f5f9',borderRadius:10,padding:3,gap:2,flex:1,maxWidth:200}}>
+          {['note','checklist'].map(t=>(
+            <button key={t} onClick={()=>up('type',t)} style={{
+              flex:1,background:draft.type===t?'white':'none',border:'none',
+              color:draft.type===t?'#1e293b':'#94a3b8',
+              fontSize:12.5,fontWeight:draft.type===t?700:400,
+              padding:'7px 8px',borderRadius:8,
+              boxShadow:draft.type===t?'0 1px 4px rgba(0,0,0,.10)':'none',
+              transition:'all .15s',
+            }}>
+              {t==='note'?'📝 Note':'☑ List'}
+            </button>
+          ))}
         </div>
 
-        {/* body */}
-        <div style={{ flex:1, overflowY:'auto', padding:'20px 24px' }}>
-          <input
-            value={draft.title}
-            onChange={e => up('title', e.target.value)}
-            placeholder="Title"
-            style={{ width:'100%', border:'none', outline:'none', background:'none', fontFamily:"'Lora',Georgia,serif", fontSize:24, fontWeight:700, color:'#1e293b', marginBottom:4 }}
+        <div style={{flex:1}}/>
+
+        {/* Pin */}
+        <button
+          className="tappable"
+          onClick={()=>up('pinned',!draft.pinned)}
+          style={{background:'none',border:'none',padding:'8px',fontSize:20,opacity:draft.pinned?1:.3,transition:'opacity .2s'}}
+          title={draft.pinned?'Unpin':'Pin'}
+        >📌</button>
+
+        {/* Options (colour + category) */}
+        <button
+          className="tappable"
+          onClick={()=>setShowOpts(s=>!s)}
+          style={{background:'none',border:'none',padding:'8px',fontSize:20,color:'#64748b',lineHeight:1,position:'relative'}}
+          aria-label="Note options"
+        >
+          <span style={{display:'inline-block',width:20,height:20,borderRadius:'50%',background:acc.border,border:'2px solid #e2e8f0',verticalAlign:'middle'}}/>
+        </button>
+
+        {/* Delete (only for existing notes) */}
+        {!isNew && (
+          <button
+            className="tappable"
+            onClick={handleDelete}
+            style={{background:'none',border:'none',padding:'8px',fontSize:18,color:'#f43f5e',lineHeight:1}}
+            aria-label="Delete note"
+          >🗑</button>
+        )}
+      </div>
+
+      {/* ── Options sheet (colour + category) ── */}
+      {showOpts && (
+        <div style={{
+          borderBottom:'1px solid #f1f5f9',
+          padding:'14px 16px',
+          background:'#fafafa',
+          flexShrink:0,
+          animation:'fadeIn .15s ease',
+        }}>
+          {/* Colour */}
+          <div style={{marginBottom:14}}>
+            <div style={{fontSize:10.5,fontWeight:700,color:'#94a3b8',letterSpacing:1,marginBottom:10}}>COLOUR</div>
+            <div style={{display:'flex',gap:12,flexWrap:'wrap'}}>
+              {ACCENTS.map(a=>(
+                <button
+                  key={a.id}
+                  onClick={()=>up('color',a.id)}
+                  title={a.label}
+                  style={{
+                    width:32,height:32,borderRadius:'50%',
+                    background:a.border,
+                    border:draft.color===a.id?'3px solid #1e293b':'3px solid transparent',
+                    outline:draft.color===a.id?'2px solid white':'none',
+                    outlineOffset:-4,
+                    transition:'border .15s',padding:0,
+                  }}
+                />
+              ))}
+            </div>
+          </div>
+          {/* Category */}
+          <div>
+            <div style={{fontSize:10.5,fontWeight:700,color:'#94a3b8',letterSpacing:1,marginBottom:10}}>CATEGORY</div>
+            <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+              {CATEGORIES.map(c=>(
+                <button key={c} onClick={()=>{up('category',c);setShowOpts(false);}} style={{
+                  padding:'7px 13px',borderRadius:20,fontSize:12.5,fontWeight:500,
+                  background:draft.category===c?'#1e293b':'#f1f5f9',
+                  color:draft.category===c?'white':'#64748b',
+                  border:'none',transition:'all .15s',
+                }}>
+                  {CAT_ICONS[c]} {c}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Editor body (scrollable) ── */}
+      <div style={{flex:1,overflowY:'auto',padding:'20px 20px 40px'}}>
+
+        {/* Title */}
+        <input
+          value={draft.title}
+          onChange={e=>up('title',e.target.value)}
+          placeholder="Title"
+          style={{
+            width:'100%',border:'none',outline:'none',background:'none',
+            fontFamily:"'Lora',serif",fontSize:26,fontWeight:700,
+            color:'#1e293b',marginBottom:4,lineHeight:1.25,
+          }}
+        />
+        <div style={{height:1,background:'#f1f5f9',marginBottom:18}}/>
+
+        {/* Note text */}
+        {draft.type==='note' ? (
+          <textarea
+            ref={textRef}
+            value={draft.content}
+            onChange={e=>up('content',e.target.value)}
+            placeholder="Start writing…"
+            style={{
+              width:'100%',minHeight:260,border:'none',outline:'none',background:'none',
+              resize:'none',fontSize:16,lineHeight:1.8,color:'#374151',
+              fontFamily:"'DM Sans',sans-serif",
+            }}
           />
-          <div style={{ height:1, background:'#e2e8f0', marginBottom:16 }} />
+        ) : (
+          /* Checklist */
+          <div>
+            {total>0 && (
+              <div style={{marginBottom:18}}>
+                <div style={{height:6,borderRadius:6,background:'#f1f5f9',overflow:'hidden'}}>
+                  <div style={{height:'100%',borderRadius:6,width:`${(checked/total)*100}%`,background:acc.border,transition:'width .3s'}}/>
+                </div>
+                <div style={{fontSize:12,color:'#94a3b8',marginTop:6,textAlign:'right'}}>{checked} of {total} done</div>
+              </div>
+            )}
 
-          {draft.type === 'note' ? (
-            <textarea
-              ref={textRef}
-              value={draft.content}
-              onChange={e => up('content', e.target.value)}
-              placeholder="Start writing…"
-              style={{ width:'100%', minHeight:200, border:'none', outline:'none', background:'none', resize:'vertical', fontSize:14.5, lineHeight:1.8, color:'#374151', fontFamily:"'DM Sans',sans-serif" }}
+            {ordered.map(item=>(
+              <div key={item.id} style={{display:'flex',alignItems:'center',gap:12,marginBottom:12,minHeight:44}}>
+                <CheckCircle checked={item.checked} color={acc.border} size={24} onToggle={()=>togI(item.id)}/>
+                <input
+                  id={`ei-${item.id}`}
+                  value={item.text}
+                  onChange={e=>updI(item.id,e.target.value)}
+                  onKeyDown={e=>{
+                    if(e.key==='Enter'){e.preventDefault();addItem(item.id);}
+                    if(e.key==='Backspace'&&!item.text){e.preventDefault();delI(item.id);}
+                  }}
+                  placeholder="List item…"
+                  style={{
+                    flex:1,border:'none',outline:'none',background:'none',
+                    fontSize:16,color:item.checked?'#94a3b8':'#374151',
+                    textDecoration:item.checked?'line-through':'none',
+                    transition:'color .2s',minHeight:44,
+                  }}
+                />
+                <button
+                  onClick={()=>delI(item.id)}
+                  style={{background:'none',border:'none',color:'#cbd5e1',fontSize:18,padding:'8px',minWidth:44,minHeight:44,display:'flex',alignItems:'center',justifyContent:'center'}}
+                >✕</button>
+              </div>
+            ))}
+
+            <button
+              onClick={()=>addItem()}
+              style={{
+                display:'flex',alignItems:'center',gap:8,
+                marginTop:4,padding:'12px 0',
+                background:'none',border:'none',
+                color:acc.border,fontSize:15,fontWeight:600,
+                minHeight:44,
+              }}
+            >
+              <span style={{width:24,height:24,borderRadius:'50%',border:`2px dashed ${acc.border}`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,lineHeight:1}}>+</span>
+              Add item
+            </button>
+          </div>
+        )}
+
+        {/* Tags */}
+        <div style={{marginTop:28,paddingTop:18,borderTop:'1px solid #f1f5f9'}}>
+          <div style={{fontSize:11,fontWeight:700,color:'#94a3b8',letterSpacing:1,marginBottom:10}}>TAGS</div>
+          <div style={{display:'flex',flexWrap:'wrap',gap:7,marginBottom:12}}>
+            {draft.tags.map(t=>(
+              <span key={t} style={{background:acc.border+'20',color:acc.border,border:`1px solid ${acc.border}44`,fontSize:12.5,padding:'4px 12px',borderRadius:20,display:'flex',alignItems:'center',gap:6}}>
+                #{t}
+                <button onClick={()=>up('tags',draft.tags.filter(x=>x!==t))} style={{background:'none',border:'none',color:'inherit',padding:0,fontSize:14,lineHeight:1,minWidth:20,minHeight:20,display:'flex',alignItems:'center',justifyContent:'center'}}>×</button>
+              </span>
+            ))}
+          </div>
+          <div style={{display:'flex',gap:10}}>
+            <input
+              value={tagInput}
+              onChange={e=>setTagInput(e.target.value)}
+              onKeyDown={e=>{if(e.key==='Enter'||e.key===','){e.preventDefault();addTag();}}}
+              placeholder="Add tag, press Enter…"
+              onFocus={e=>e.target.style.borderColor=acc.border}
+              onBlur={e=>e.target.style.borderColor='#e2e8f0'}
+              style={{flex:1,border:'1.5px solid #e2e8f0',borderRadius:10,background:'white',color:'#374151',fontSize:14,padding:'10px 14px',outline:'none',transition:'border-color .15s',minHeight:44}}
             />
-          ) : (
-            <div>
-              {total > 0 && (
-                <div style={{ marginBottom:14 }}>
-                  <div style={{ height:5, borderRadius:5, background:'#e2e8f0', overflow:'hidden' }}>
-                    <div style={{ height:'100%', borderRadius:5, width:`${total?(checked/total)*100:0}%`, background:acc.border, transition:'width .3s' }} />
-                  </div>
-                  <div style={{ fontSize:11.5, color:'#94a3b8', marginTop:5 }}>{checked} of {total} completed</div>
-                </div>
-              )}
-
-              {ordered.map(item => (
-                <div key={item.id} style={{ display:'flex', alignItems:'center', gap:10, marginBottom:8 }}>
-                  <button
-                    onClick={() => togI(item.id)}
-                    style={{ width:22, height:22, borderRadius:'50%', flexShrink:0, border:`2px solid ${item.checked?acc.border:'#cbd5e1'}`, background:item.checked?acc.border:'white', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', fontSize:10, color:'white', transition:'all .2s' }}
-                  >{item.checked ? '✓' : ''}</button>
-                  <input
-                    id={`item-${item.id}`}
-                    value={item.text}
-                    onChange={e => updI(item.id, e.target.value)}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter')    { e.preventDefault(); addItem(item.id); }
-                      if (e.key === 'Backspace' && !item.text) { e.preventDefault(); delI(item.id); }
-                    }}
-                    placeholder="List item…"
-                    style={{ flex:1, border:'none', outline:'none', background:'none', fontSize:14, color:item.checked?'#94a3b8':'#374151', textDecoration:item.checked?'line-through':'none', transition:'color .2s', fontFamily:"'DM Sans',sans-serif" }}
-                  />
-                  <button onClick={() => delI(item.id)} style={{ background:'none', border:'none', cursor:'pointer', color:'#cbd5e1', fontSize:12, padding:'2px 4px' }}>✕</button>
-                </div>
-              ))}
-
-              <button
-                className="add-item-btn"
-                onClick={() => addItem()}
-                style={{ marginTop:6, background:'none', border:`1.5px dashed ${acc.border}88`, borderRadius:8, color:acc.border, cursor:'pointer', fontSize:12.5, padding:'7px 16px', display:'flex', alignItems:'center', gap:6, transition:'background .15s' }}
-              >+ Add item</button>
-            </div>
-          )}
-
-          {/* tags */}
-          <div style={{ marginTop:24, paddingTop:16, borderTop:'1px solid #e2e8f0' }}>
-            <div style={{ fontSize:10.5, fontWeight:700, color:'#94a3b8', letterSpacing:.8, marginBottom:8 }}>TAGS</div>
-            <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginBottom:10 }}>
-              {draft.tags.map(t => (
-                <span key={t} style={{ background:acc.border+'25', color:acc.border, border:`1px solid ${acc.border}40`, fontSize:11.5, padding:'3px 10px', borderRadius:20, display:'flex', alignItems:'center', gap:5 }}>
-                  #{t}
-                  <button onClick={() => up('tags', draft.tags.filter(x=>x!==t))} style={{ background:'none', border:'none', cursor:'pointer', color:'inherit', padding:0, fontSize:10, lineHeight:1 }}>✕</button>
-                </span>
-              ))}
-            </div>
-            <div style={{ display:'flex', gap:8 }}>
-              <input
-                value={tagInput}
-                onChange={e => setTagInput(e.target.value)}
-                onKeyDown={e => { if (e.key==='Enter'||e.key===',') { e.preventDefault(); addTag(); } }}
-                placeholder="Type a tag and press Enter…"
-                onFocus={e => e.target.style.borderColor=acc.border}
-                onBlur={e => e.target.style.borderColor='#e2e8f0'}
-                style={{ flex:1, border:'1px solid #e2e8f0', borderRadius:7, background:'white', color:'#374151', fontSize:12.5, padding:'6px 12px', outline:'none', transition:'border-color .15s', fontFamily:"'DM Sans',sans-serif" }}
-              />
-              <button onClick={addTag} style={{ background:'#f1f5f9', border:'1px solid #e2e8f0', borderRadius:7, color:'#475569', cursor:'pointer', fontSize:12, padding:'6px 14px' }}>Add</button>
-            </div>
+            <button onClick={addTag} style={{background:'#f1f5f9',border:'none',borderRadius:10,color:'#475569',fontSize:13,fontWeight:600,padding:'10px 16px',minHeight:44}}>Add</button>
           </div>
         </div>
+
+        {/* Export/Import nudge */}
+        <div style={{marginTop:32,paddingTop:16,borderTop:'1px solid #f1f5f9',display:'flex',gap:10}}>
+          <div style={{fontSize:11,color:'#94a3b8',lineHeight:1.5}}>
+            Note saved locally · use Data menu to back up
+          </div>
+        </div>
+      </div>
+
+      {/* ── Save bar ── */}
+      <div style={{
+        padding:'12px 16px',
+        borderTop:'1px solid #f1f5f9',
+        background:'white',
+        flexShrink:0,
+        paddingBottom:'calc(12px + env(safe-area-inset-bottom, 0px))',
+      }}>
+        <button
+          className="tappable"
+          onClick={handleSave}
+          style={{
+            width:'100%',background:'#1e293b',border:'none',borderRadius:12,
+            color:'white',fontSize:15,fontWeight:700,padding:'14px',
+            boxShadow:'0 4px 14px rgba(30,41,59,.25)',
+          }}
+        >Save note</button>
       </div>
     </div>
   );
 }
 
-// ── Main App ──────────────────────────────────────────────────────────────────
+/* ─── Type Picker Sheet ──────────────────────────────────────────────────── */
+function TypePicker({ onPick, onClose }) {
+  return (
+    <div
+      onClick={onClose}
+      style={{position:'fixed',inset:0,background:'rgba(0,0,0,.35)',zIndex:200,display:'flex',alignItems:'flex-end',animation:'fadeIn .15s ease'}}
+    >
+      <div
+        onClick={e=>e.stopPropagation()}
+        style={{width:'100%',background:'white',borderRadius:'20px 20px 0 0',padding:'24px 20px 40px',animation:'slideUp .22s ease'}}
+      >
+        <div style={{width:36,height:4,borderRadius:2,background:'#e2e8f0',margin:'0 auto 22px'}}/>
+        <div style={{fontSize:13,fontWeight:700,color:'#94a3b8',letterSpacing:.8,marginBottom:16}}>CREATE NEW</div>
+
+        <button onClick={()=>onPick('note')} style={{
+          width:'100%',display:'flex',alignItems:'center',gap:16,
+          padding:'16px',background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:14,
+          marginBottom:10,textAlign:'left',
+        }}>
+          <span style={{fontSize:28,lineHeight:1}}>📝</span>
+          <div>
+            <div style={{fontSize:15,fontWeight:700,color:'#1e293b',marginBottom:2}}>Note</div>
+            <div style={{fontSize:12.5,color:'#64748b'}}>Free-form text, thoughts, ideas</div>
+          </div>
+        </button>
+
+        <button onClick={()=>onPick('checklist')} style={{
+          width:'100%',display:'flex',alignItems:'center',gap:16,
+          padding:'16px',background:'#f0fdf9',border:'1px solid #bbf7d0',borderRadius:14,
+          marginBottom:0,textAlign:'left',
+        }}>
+          <span style={{fontSize:28,lineHeight:1}}>☑️</span>
+          <div>
+            <div style={{fontSize:15,fontWeight:700,color:'#1e293b',marginBottom:2}}>Checklist</div>
+            <div style={{fontSize:12.5,color:'#64748b'}}>Shopping lists, to-dos, tasks</div>
+          </div>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Categories Sheet ───────────────────────────────────────────────────── */
+function CategoriesSheet({ notes, filterCat, onSelect, onClose }) {
+  const catCounts = notes.reduce((a,n)=>{a[n.category]=(a[n.category]||0)+1;return a;},{});
+  const cats = ['All',...CATEGORIES];
+  return (
+    <div onClick={onClose} style={{position:'fixed',inset:0,background:'rgba(0,0,0,.35)',zIndex:200,display:'flex',alignItems:'flex-end',animation:'fadeIn .15s ease'}}>
+      <div onClick={e=>e.stopPropagation()} style={{width:'100%',background:'white',borderRadius:'20px 20px 0 0',padding:'20px 16px 40px',animation:'slideUp .22s ease',maxHeight:'80vh',overflowY:'auto'}}>
+        <div style={{width:36,height:4,borderRadius:2,background:'#e2e8f0',margin:'0 auto 20px'}}/>
+        <div style={{fontSize:13,fontWeight:700,color:'#94a3b8',letterSpacing:.8,marginBottom:12}}>CATEGORIES</div>
+        {cats.map(c=>{
+          const active=filterCat===c;
+          return (
+            <button key={c} onClick={()=>{onSelect(c);onClose();}} style={{
+              width:'100%',display:'flex',alignItems:'center',justifyContent:'space-between',
+              padding:'13px 14px',borderRadius:12,border:'none',marginBottom:4,
+              background:active?'#1e293b':'#f8fafc',
+              color:active?'white':'#374151',
+              fontSize:14,fontWeight:active?700:400,
+            }}>
+              <span>{CAT_ICONS[c]} {c==='All'?'All Notes':c}</span>
+              {c!=='All'&&catCounts[c]&&<span style={{fontSize:11,fontWeight:700,background:active?'rgba(255,255,255,.2)':'#e2e8f0',color:active?'white':'#64748b',borderRadius:10,padding:'2px 9px'}}>{catCounts[c]}</span>}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ─── Data Sheet ─────────────────────────────────────────────────────────── */
+function DataSheet({ notes, setNotes, persist, onClose }) {
+  const doExport = () => {
+    const blob=new Blob([JSON.stringify(notes,null,2)],{type:'application/json'});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download=`nodevault-${new Date().toISOString().slice(0,10)}.json`;
+    a.click();
+  };
+  return (
+    <div onClick={onClose} style={{position:'fixed',inset:0,background:'rgba(0,0,0,.35)',zIndex:200,display:'flex',alignItems:'flex-end',animation:'fadeIn .15s ease'}}>
+      <div onClick={e=>e.stopPropagation()} style={{width:'100%',background:'white',borderRadius:'20px 20px 0 0',padding:'20px 20px 44px',animation:'slideUp .22s ease'}}>
+        <div style={{width:36,height:4,borderRadius:2,background:'#e2e8f0',margin:'0 auto 22px'}}/>
+        <div style={{fontSize:13,fontWeight:700,color:'#94a3b8',letterSpacing:.8,marginBottom:16}}>DATA &amp; BACKUP</div>
+
+        <button onClick={doExport} style={{width:'100%',display:'flex',alignItems:'center',gap:14,padding:'16px',background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:14,marginBottom:10,textAlign:'left'}}>
+          <span style={{fontSize:26}}>⬇️</span>
+          <div>
+            <div style={{fontSize:14,fontWeight:700,color:'#1e293b',marginBottom:2}}>Export notes</div>
+            <div style={{fontSize:12,color:'#64748b'}}>Download a JSON backup of all {notes.length} notes</div>
+          </div>
+        </button>
+
+        <label style={{width:'100%',display:'flex',alignItems:'center',gap:14,padding:'16px',background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:14,textAlign:'left',cursor:'pointer'}}>
+          <span style={{fontSize:26}}>⬆️</span>
+          <div>
+            <div style={{fontSize:14,fontWeight:700,color:'#1e293b',marginBottom:2}}>Import notes</div>
+            <div style={{fontSize:12,color:'#64748b'}}>Merge notes from a backup file</div>
+          </div>
+          <input type="file" accept=".json" style={{display:'none'}} onChange={e=>{
+            const file=e.target.files[0]; if(!file) return;
+            const reader=new FileReader();
+            reader.onload=ev=>{
+              try {
+                const imp=JSON.parse(ev.target.result);
+                if(Array.isArray(imp)&&confirm(`Import ${imp.length} notes? Duplicates will be skipped.`)){
+                  setNotes(prev=>{
+                    const ids=new Set(prev.map(n=>n.id));
+                    const next=[...imp.filter(n=>!ids.has(n.id)),...prev];
+                    persist(next); return next;
+                  });
+                  onClose();
+                }
+              } catch{ alert('Invalid backup file'); }
+            };
+            reader.readAsText(file);
+            e.target.value='';
+          }}/>
+        </label>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Main App ───────────────────────────────────────────────────────────── */
 function App() {
-  const [notes, setNotes]             = useState([]);
-  const [loaded, setLoaded]           = useState(false);
-  const [search, setSearch]           = useState('');
-  const [filterCat, setFilterCat]     = useState('All');
-  const [filterColor, setFilterColor] = useState('All');
-  const [sortBy, setSortBy]           = useState('updated');
-  const [editNote, setEditNote]       = useState(null);
+  const [notes,      setNotes]     = useState([]);
+  const [loaded,     setLoaded]    = useState(false);
+  const [search,     setSearch]    = useState('');
+  const [searching,  setSearching] = useState(false);
+  const [filterCat,  setFilterCat] = useState('All');
+  const [sortBy,     setSortBy]    = useState('updated');
+  const [editNote,   setEditNote]  = useState(null);
+  const [showPicker, setPicker]    = useState(false);
+  const [showCats,   setCats]      = useState(false);
+  const [showData,   setData]      = useState(false);
+  const searchRef = useRef(null);
 
-  // Load from localStorage
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) setNotes(JSON.parse(raw));
-    } catch(e) { console.error('Load error', e); }
-    setLoaded(true);
-  }, []);
+  useEffect(()=>{ setNotes(load()); setLoaded(true); },[]);
 
-  const persist = (n) => {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(n)); }
-    catch(e) { console.error('Save error', e); }
-  };
+  const persist = useCallback(n => save(n), []);
 
-  const saveNote = (note) => setNotes(prev => {
-    const exists = prev.find(n => n.id === note.id);
-    const next   = exists ? prev.map(n => n.id===note.id ? note : n) : [note, ...prev];
-    persist(next); return next;
+  const saveNote = note => setNotes(prev=>{
+    const ex=prev.find(n=>n.id===note.id);
+    const nx=ex?prev.map(n=>n.id===note.id?note:n):[note,...prev];
+    persist(nx); return nx;
   });
 
-  const deleteNote = (id) => {
-    if (!confirm('Delete this note?')) return;
-    setNotes(prev => { const next=prev.filter(n=>n.id!==id); persist(next); return next; });
-  };
-
-  const pinNote = (id) => setNotes(prev => {
-    const next = prev.map(n => n.id===id ? {...n, pinned:!n.pinned} : n);
-    persist(next); return next;
+  const deleteNote = id => setNotes(prev=>{
+    const nx=prev.filter(n=>n.id!==id); persist(nx); return nx;
   });
 
-  const openNew = (type='note') => {
-    const n = defaultNote(); n.type = type; setEditNote(n);
+  const pinNote = (id,e) => {
+    e.stopPropagation();
+    setNotes(prev=>{ const nx=prev.map(n=>n.id===id?{...n,pinned:!n.pinned}:n); persist(nx); return nx; });
   };
+
+  const openNew = (type) => { setPicker(false); setEditNote(newNote(type)); };
 
   // Filter + sort
-  const filtered = notes
-    .filter(n => {
-      if (filterCat   !== 'All' && n.category !== filterCat)   return false;
-      if (filterColor !== 'All' && n.color    !== filterColor)  return false;
-      if (search) {
-        const q = search.toLowerCase();
-        return (
-          n.title.toLowerCase().includes(q)    ||
-          n.content.toLowerCase().includes(q)  ||
-          n.category.toLowerCase().includes(q) ||
-          n.tags.some(t => t.includes(q))      ||
-          n.items.some(i => i.text.toLowerCase().includes(q))
-        );
+  const filtered = useMemo(()=> notes
+    .filter(n=>{
+      if(filterCat==='__pinned__'&&!n.pinned) return false;
+      if(filterCat!=='All'&&filterCat!=='__pinned__'&&n.category!==filterCat) return false;
+      if(search){
+        const q=search.toLowerCase();
+        return n.title.toLowerCase().includes(q)||n.content.toLowerCase().includes(q)||
+               n.category.toLowerCase().includes(q)||n.tags.some(t=>t.includes(q))||
+               n.items.some(i=>i.text.toLowerCase().includes(q));
       }
       return true;
     })
-    .sort((a,b) => {
-      if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
-      if (sortBy==='updated') return new Date(b.updatedAt) - new Date(a.updatedAt);
-      if (sortBy==='created') return new Date(b.createdAt) - new Date(a.createdAt);
-      if (sortBy==='title')   return a.title.localeCompare(b.title);
+    .sort((a,b)=>{
+      if(a.pinned!==b.pinned) return a.pinned?-1:1;
+      if(sortBy==='updated') return new Date(b.updatedAt)-new Date(a.updatedAt);
+      if(sortBy==='created') return new Date(b.createdAt)-new Date(a.createdAt);
+      if(sortBy==='title')   return a.title.localeCompare(b.title);
       return 0;
-    });
+    })
+  ,[notes,filterCat,search,sortBy]);
 
-  const catCounts   = notes.reduce((acc,n) => { acc[n.category]=(acc[n.category]||0)+1; return acc; }, {});
   const pinnedCount = notes.filter(n=>n.pinned).length;
+  const catLabel    = filterCat==='All' ? 'All Notes' : `${CAT_ICONS[filterCat]} ${filterCat}`;
 
   return (
-    <div style={{ minHeight:'100vh', background:'#f1f5f9' }}>
+    <div style={{display:'flex',flexDirection:'column',height:'100%',maxWidth:680,margin:'0 auto',position:'relative'}}>
 
-      {/* ── sticky header ── */}
-      <div style={{ background:'white', borderBottom:'1px solid #e2e8f0', position:'sticky', top:0, zIndex:50, boxShadow:'0 1px 8px rgba(0,0,0,.06)' }}>
-        <div style={{ maxWidth:1060, margin:'0 auto', padding:'0 20px' }}>
-          <div style={{ display:'flex', alignItems:'center', gap:14, height:60, flexWrap:'wrap' }}>
-
-            {/* logo */}
-            <div style={{ display:'flex', alignItems:'baseline', gap:7, flexShrink:0 }}>
-              <span style={{ fontFamily:"'Lora',serif", fontSize:22, fontWeight:800, color:'#1e293b', letterSpacing:-.5 }}>NoteVault</span>
-              <span style={{ fontSize:11, color:'#94a3b8' }}>{notes.length} note{notes.length!==1?'s':''}</span>
+      {/* ── App Header ── */}
+      {!searching ? (
+        <div style={{
+          background:'white',borderBottom:'1px solid #f1f5f9',
+          padding:'14px 20px 12px',flexShrink:0,
+          boxShadow:'0 1px 6px rgba(0,0,0,.05)',
+        }}>
+          <div style={{display:'flex',alignItems:'center',gap:10}}>
+            <div style={{flex:1}}>
+              <div style={{fontFamily:"'Lora',serif",fontSize:22,fontWeight:700,color:'#1e293b',letterSpacing:-.3,lineHeight:1}}>NoteVault</div>
+              <div style={{fontSize:11,color:'#94a3b8',marginTop:2}}>{notes.length} note{notes.length!==1?'s':''}{pinnedCount>0?` · ${pinnedCount} pinned`:''}</div>
             </div>
-
-            {/* search */}
-            <div style={{ position:'relative', flex:1, maxWidth:400 }}>
-              <span style={{ position:'absolute', left:11, top:'50%', transform:'translateY(-50%)', color:'#94a3b8', fontSize:16, pointerEvents:'none' }}>⌕</span>
-              <input
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                placeholder="Search notes, tags, categories…"
-                onFocus={e => e.target.style.borderColor='#94a3b8'}
-                onBlur={e  => e.target.style.borderColor='#e2e8f0'}
-                style={{ width:'100%', background:'#f8fafc', border:'1.5px solid #e2e8f0', borderRadius:10, color:'#1e293b', fontSize:13.5, padding:'8px 32px 8px 34px', outline:'none', transition:'border-color .15s', fontFamily:"'DM Sans',sans-serif" }}
-              />
-              {search && (
-                <button onClick={() => setSearch('')} style={{ position:'absolute', right:10, top:'50%', transform:'translateY(-50%)', background:'none', border:'none', color:'#94a3b8', cursor:'pointer', fontSize:13 }}>✕</button>
-              )}
-            </div>
-
-            {/* sort */}
-            <select value={sortBy} onChange={e=>setSortBy(e.target.value)} style={{ background:'#f8fafc', border:'1.5px solid #e2e8f0', borderRadius:8, color:'#475569', fontSize:12, padding:'7px 10px', cursor:'pointer', outline:'none' }}>
-              <option value="updated">↓ Last edited</option>
-              <option value="created">↓ Newest first</option>
-              <option value="title">A → Z</option>
+            {/* Search icon */}
+            <button className="tappable" onClick={()=>{setSearching(true);setTimeout(()=>searchRef.current?.focus(),80);}} style={{background:'none',border:'none',padding:'8px',fontSize:20,color:'#64748b',lineHeight:1,minWidth:44,minHeight:44,display:'flex',alignItems:'center',justifyContent:'center'}}>⌕</button>
+            {/* Sort */}
+            <select value={sortBy} onChange={e=>setSortBy(e.target.value)} style={{background:'none',border:'none',color:'#64748b',fontSize:12.5,fontWeight:600,padding:'8px 4px',cursor:'pointer',outline:'none',minHeight:44}}>
+              <option value="updated">Recent</option>
+              <option value="created">Newest</option>
+              <option value="title">A–Z</option>
             </select>
-
-            {/* new buttons */}
-            <button onClick={() => openNew('checklist')} style={{ background:'#f0fdf9', border:'1.5px solid #10b98155', borderRadius:9, color:'#10b981', cursor:'pointer', fontSize:12.5, fontWeight:600, padding:'7px 14px', whiteSpace:'nowrap' }}>
-              ☑ New List
-            </button>
-            <button onClick={() => openNew('note')} style={{ background:'#1e293b', border:'none', borderRadius:9, color:'white', cursor:'pointer', fontSize:12.5, fontWeight:700, padding:'7px 18px', whiteSpace:'nowrap', boxShadow:'0 2px 8px rgba(30,41,59,.25)' }}>
-              + New Note
-            </button>
+            {/* Data */}
+            <button className="tappable" onClick={()=>setData(true)} style={{background:'none',border:'none',padding:'8px',fontSize:18,color:'#64748b',lineHeight:1,minWidth:44,minHeight:44,display:'flex',alignItems:'center',justifyContent:'center'}}>⋯</button>
           </div>
+
+          {/* Active filter pill */}
+          {filterCat!=='All' && (
+            <div style={{marginTop:10,display:'flex',alignItems:'center',gap:8}}>
+              <span style={{fontSize:12,color:'#64748b'}}>Showing:</span>
+              <span style={{display:'flex',alignItems:'center',gap:6,background:'#1e293b',color:'white',fontSize:12,fontWeight:600,padding:'4px 12px',borderRadius:20}}>
+                {catLabel}
+                <button onClick={()=>setFilterCat('All')} style={{background:'none',border:'none',color:'rgba(255,255,255,.7)',fontSize:14,padding:'0 0 0 2px',lineHeight:1,cursor:'pointer'}}>×</button>
+              </span>
+            </div>
+          )}
         </div>
+      ) : (
+        /* ── Search bar ── */
+        <div style={{background:'white',borderBottom:'1px solid #f1f5f9',padding:'12px 16px',flexShrink:0,display:'flex',alignItems:'center',gap:10,boxShadow:'0 1px 6px rgba(0,0,0,.05)'}}>
+          <div style={{flex:1,position:'relative'}}>
+            <span style={{position:'absolute',left:12,top:'50%',transform:'translateY(-50%)',color:'#94a3b8',fontSize:17,pointerEvents:'none'}}>⌕</span>
+            <input
+              ref={searchRef}
+              value={search}
+              onChange={e=>setSearch(e.target.value)}
+              placeholder="Search notes, tags, categories…"
+              style={{width:'100%',background:'#f8fafc',border:'1.5px solid #e2e8f0',borderRadius:12,color:'#1e293b',fontSize:15,padding:'11px 14px 11px 38px',outline:'none',fontFamily:"'DM Sans',sans-serif"}}
+            />
+          </div>
+          <button className="tappable" onClick={()=>{setSearch('');setSearching(false);}} style={{background:'none',border:'none',color:'#475569',fontSize:14,fontWeight:600,padding:'8px',minWidth:44,minHeight:44,whiteSpace:'nowrap'}}>Cancel</button>
+        </div>
+      )}
+
+      {/* ── Notes list (scrollable) ── */}
+      <div style={{flex:1,overflowY:'auto',padding:'16px 16px 100px'}}>
+        {search && filtered.length>0 && (
+          <div style={{fontSize:12,color:'#94a3b8',marginBottom:12,padding:'0 4px'}}>
+            {filtered.length} result{filtered.length!==1?'s':''} for <strong style={{color:'#475569'}}>"{search}"</strong>
+          </div>
+        )}
+
+        {!loaded ? (
+          <div style={{textAlign:'center',padding:60,color:'#94a3b8'}}>Loading…</div>
+        ) : filtered.length===0 ? (
+          <div style={{textAlign:'center',padding:'60px 20px',animation:'fadeIn .3s ease'}}>
+            <div style={{fontSize:56,marginBottom:16}}>{search?'🔍':'📝'}</div>
+            <p style={{color:'#64748b',fontSize:16,fontWeight:500,marginBottom:6}}>
+              {search?`No results for "${search}"`:'No notes yet'}
+            </p>
+            <p style={{color:'#94a3b8',fontSize:13,marginBottom:28}}>
+              {!search&&'Tap + to create your first note'}
+            </p>
+          </div>
+        ) : (
+          <div style={{display:'flex',flexDirection:'column',gap:12}}>
+            {filtered.map((note,i)=>(
+              <div key={note.id} style={{animation:`fadeUp .2s ease ${Math.min(i,6)*35}ms both`}}>
+                <NoteCard note={note} onOpen={n=>{setEditNote(n); setSearching(false);}} sq={search}/>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* ── main layout ── */}
-      <div style={{ maxWidth:1060, margin:'0 auto', padding:'20px 20px 60px', display:'flex', gap:20 }}>
+      {/* ── FAB (Floating Action Button) ── */}
+      <button
+        className="tappable"
+        onClick={()=>setPicker(true)}
+        style={{
+          position:'fixed',
+          bottom:'calc(72px + env(safe-area-inset-bottom, 12px))',
+          right:'calc(50% - min(340px, 50%) + 20px)',
+          width:58,height:58,
+          background:'#1e293b',border:'none',borderRadius:'50%',
+          color:'white',fontSize:28,lineHeight:1,
+          boxShadow:'0 6px 20px rgba(30,41,59,.35)',
+          display:'flex',alignItems:'center',justifyContent:'center',
+          zIndex:100,
+          animation:'fabPop .4s cubic-bezier(.34,1.56,.64,1) both',
+        }}
+        aria-label="New note"
+      >+</button>
 
-        {/* sidebar */}
-        <div style={{ width:176, flexShrink:0 }}>
+      {/* ── Bottom Nav ── */}
+      <div className="bottom-nav" style={{
+        position:'fixed',
+        bottom:0,
+        left:'50%',transform:'translateX(-50%)',
+        width:'100%',maxWidth:680,
+        background:'white',
+        borderTop:'1px solid #f1f5f9',
+        display:'flex',
+        zIndex:100,
+        boxShadow:'0 -2px 12px rgba(0,0,0,.06)',
+      }}>
+        {/* Notes tab */}
+        <button
+          onClick={()=>{setFilterCat('All');setCats(false);}}
+          style={{flex:1,background:'none',border:'none',padding:'10px 0 8px',display:'flex',flexDirection:'column',alignItems:'center',gap:3,cursor:'pointer',minHeight:60}}
+        >
+          <span style={{fontSize:22,lineHeight:1}}>🏠</span>
+          <span style={{fontSize:10.5,fontWeight:600,color:filterCat==='All'?'#1e293b':'#94a3b8'}}>Home</span>
+        </button>
 
-          {/* categories */}
-          <div style={{ marginBottom:24 }}>
-            <div style={{ fontSize:10.5, fontWeight:700, color:'#94a3b8', letterSpacing:1, marginBottom:8, padding:'0 8px' }}>CATEGORIES</div>
-            {['All',...CATEGORIES].map(c => {
-              const active = filterCat === c;
-              return (
-                <button
-                  key={c}
-                  className={`sidebar-btn${active?' active':''}`}
-                  onClick={() => setFilterCat(c)}
-                  style={{ width:'100%', display:'flex', alignItems:'center', justifyContent:'space-between', background:active?'#1e293b':'none', border:'none', borderRadius:8, cursor:'pointer', color:active?'white':'#64748b', fontSize:12.5, fontWeight:active?600:400, padding:'7px 10px', marginBottom:2, textAlign:'left', transition:'all .15s' }}
-                >
-                  <span>{c==='All' ? '📋 All notes' : `${CAT_ICONS[c]} ${c}`}</span>
-                  {c!=='All' && catCounts[c] ? (
-                    <span style={{ fontSize:10, fontWeight:700, background:active?'rgba(255,255,255,.2)':'#e2e8f0', color:active?'white':'#64748b', borderRadius:10, padding:'1px 7px' }}>{catCounts[c]}</span>
-                  ) : null}
-                </button>
-              );
-            })}
-          </div>
+        {/* Categories tab */}
+        <button
+          onClick={()=>setCats(true)}
+          style={{flex:1,background:'none',border:'none',padding:'10px 0 8px',display:'flex',flexDirection:'column',alignItems:'center',gap:3,cursor:'pointer',minHeight:60}}
+        >
+          <span style={{fontSize:22,lineHeight:1}}>🗂</span>
+          <span style={{fontSize:10.5,fontWeight:600,color:showCats?'#1e293b':'#94a3b8'}}>Categories</span>
+        </button>
 
-          {/* colour filter */}
-          <div style={{ marginBottom:20 }}>
-            <div style={{ fontSize:10.5, fontWeight:700, color:'#94a3b8', letterSpacing:1, marginBottom:8, padding:'0 8px' }}>COLOUR</div>
-            <div style={{ display:'flex', flexWrap:'wrap', gap:7, padding:'0 8px' }}>
-              <button
-                onClick={() => setFilterColor('All')}
-                title="All colours"
-                style={{ width:20, height:20, borderRadius:'50%', background:filterColor==='All'?'#1e293b':'#e2e8f0', border:'2px solid transparent', cursor:'pointer', fontSize:9, color:'white', fontWeight:700, display:'flex', alignItems:'center', justifyContent:'center' }}
-              >✦</button>
-              {ACCENTS.filter(a=>a.id!=='stone').map(a => (
-                <button
-                  key={a.id}
-                  onClick={() => setFilterColor(filterColor===a.id ? 'All' : a.id)}
-                  title={a.label}
-                  style={{ width:20, height:20, borderRadius:'50%', background:a.border, border:filterColor===a.id?'3px solid #1e293b':'2px solid transparent', cursor:'pointer', outline:'none', transition:'border .15s' }}
-                />
-              ))}
-            </div>
-          </div>
+        {/* Space for FAB */}
+        <div style={{flex:1}}/>
 
-          {/* pinned count */}
-          {pinnedCount > 0 && (
-            <div style={{ padding:'10px', background:'#fefce8', border:'1px solid #fde68a', borderRadius:8 }}>
-              <div style={{ fontSize:10.5, fontWeight:700, color:'#92400e', letterSpacing:.5 }}>📌 PINNED</div>
-              <div style={{ fontSize:12, color:'#78350f', marginTop:2 }}>{pinnedCount} note{pinnedCount!==1?'s':''}</div>
-            </div>
-          )}
+        {/* Pinned tab */}
+        <button
+          onClick={()=>setFilterCat(filterCat==='__pinned__'?'All':'__pinned__')}
+          style={{flex:1,background:'none',border:'none',padding:'10px 0 8px',display:'flex',flexDirection:'column',alignItems:'center',gap:3,cursor:'pointer',minHeight:60}}
+        >
+          <span style={{fontSize:22,lineHeight:1}}>📌</span>
+          <span style={{fontSize:10.5,fontWeight:600,color:filterCat==='__pinned__'?'#1e293b':'#94a3b8'}}>
+            Pinned{pinnedCount>0?` (${pinnedCount})`:''}
+          </span>
+        </button>
 
-          {/* export/import */}
-          <div style={{ marginTop:24, paddingTop:16, borderTop:'1px solid #e2e8f0' }}>
-            <div style={{ fontSize:10.5, fontWeight:700, color:'#94a3b8', letterSpacing:1, marginBottom:8, padding:'0 8px' }}>DATA</div>
-            <button
-              onClick={() => {
-                const blob = new Blob([JSON.stringify(notes, null, 2)], { type:'application/json' });
-                const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-                a.download = `nodevault-backup-${new Date().toISOString().slice(0,10)}.json`; a.click();
-              }}
-              style={{ width:'100%', background:'none', border:'1px solid #e2e8f0', borderRadius:7, color:'#64748b', cursor:'pointer', fontSize:11.5, padding:'6px 10px', textAlign:'left', marginBottom:6 }}
-            >⬇ Export notes</button>
-            <label style={{ width:'100%', display:'block', background:'none', border:'1px solid #e2e8f0', borderRadius:7, color:'#64748b', cursor:'pointer', fontSize:11.5, padding:'6px 10px', textAlign:'left' }}>
-              ⬆ Import notes
-              <input type="file" accept=".json" style={{ display:'none' }} onChange={e => {
-                const file = e.target.files[0]; if (!file) return;
-                const reader = new FileReader();
-                reader.onload = ev => {
-                  try {
-                    const imported = JSON.parse(ev.target.result);
-                    if (Array.isArray(imported)) {
-                      if (confirm(`Import ${imported.length} notes? This will merge with existing notes.`)) {
-                        setNotes(prev => {
-                          const ids = new Set(prev.map(n=>n.id));
-                          const newOnes = imported.filter(n=>!ids.has(n.id));
-                          const next = [...newOnes, ...prev];
-                          persist(next); return next;
-                        });
-                      }
-                    }
-                  } catch { alert('Invalid file'); }
-                };
-                reader.readAsText(file);
-                e.target.value = '';
-              }} />
-            </label>
-          </div>
-        </div>
-
-        {/* notes grid */}
-        <div style={{ flex:1 }}>
-          {search && filtered.length > 0 && (
-            <div style={{ fontSize:12, color:'#94a3b8', marginBottom:12 }}>
-              {filtered.length} result{filtered.length!==1?'s':''} for <strong style={{ color:'#475569' }}>"{search}"</strong>
-            </div>
-          )}
-
-          {!loaded ? (
-            <div style={{ textAlign:'center', padding:60, color:'#94a3b8' }}>Loading…</div>
-          ) : filtered.length === 0 ? (
-            <div style={{ textAlign:'center', padding:'80px 20px', animation:'fadeIn .3s ease' }}>
-              <div style={{ fontSize:52, marginBottom:16 }}>{search ? '🔍' : '📝'}</div>
-              <p style={{ color:'#94a3b8', fontSize:15, marginBottom:20 }}>
-                {search
-                  ? `No notes match "${search}"`
-                  : filterCat !== 'All'
-                    ? `No notes in ${filterCat} yet`
-                    : 'No notes yet — create your first one!'}
-              </p>
-              {!search && (
-                <div style={{ display:'flex', gap:10, justifyContent:'center' }}>
-                  <button onClick={() => openNew('note')} style={{ background:'#1e293b', border:'none', borderRadius:9, color:'white', cursor:'pointer', fontSize:13, fontWeight:700, padding:'9px 20px' }}>+ New Note</button>
-                  <button onClick={() => openNew('checklist')} style={{ background:'#f0fdf9', border:'1.5px solid #10b98155', borderRadius:9, color:'#10b981', cursor:'pointer', fontSize:13, fontWeight:600, padding:'9px 20px' }}>☑ New List</button>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(230px,1fr))', gap:14, alignItems:'start' }}>
-              {filtered.map((note, i) => (
-                <div key={note.id} style={{ animation:`cardIn .25s ease ${Math.min(i,8)*30}ms both` }}>
-                  <NoteCard note={note} onOpen={setEditNote} onPin={pinNote} onDelete={deleteNote} sq={search} />
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        {/* Search tab */}
+        <button
+          onClick={()=>{setSearching(true);setTimeout(()=>searchRef.current?.focus(),80);}}
+          style={{flex:1,background:'none',border:'none',padding:'10px 0 8px',display:'flex',flexDirection:'column',alignItems:'center',gap:3,cursor:'pointer',minHeight:60}}
+        >
+          <span style={{fontSize:22,lineHeight:1}}>🔍</span>
+          <span style={{fontSize:10.5,fontWeight:600,color:searching?'#1e293b':'#94a3b8'}}>Search</span>
+        </button>
       </div>
 
-      {/* editor modal */}
+      {/* ── Overlays / sheets ── */}
+      {showPicker  && <TypePicker onPick={openNew} onClose={()=>setPicker(false)}/>}
+      {showCats    && <CategoriesSheet notes={notes} filterCat={filterCat} onSelect={setFilterCat} onClose={()=>setCats(false)}/>}
+      {showData    && <DataSheet notes={notes} setNotes={setNotes} persist={persist} onClose={()=>setData(false)}/>}
+
+      {/* ── Note Editor ── */}
       {editNote && (
-        <NoteEditor note={editNote} onSave={saveNote} onClose={() => setEditNote(null)} />
+        <NoteEditor
+          note={editNote}
+          onSave={saveNote}
+          onDelete={deleteNote}
+          onClose={()=>setEditNote(null)}
+        />
       )}
     </div>
   );
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+// Handle pinned filter
+const OrigApp = App;
+function AppWithPinFilter() {
+  return <OrigApp/>;
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
 </script>
 </body>
 </html>
